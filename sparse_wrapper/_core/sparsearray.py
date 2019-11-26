@@ -62,7 +62,9 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
     __array_priority__ = 10.0
 
     def __init__(self, value):
-        if not issparse(value):
+        if isinstance(value, (np.ndarray, np.matrix)):
+            value = scipy.sparse.csr_matrix(value)
+        elif not issparse(value):
             raise ValueError(
                 f"SparseArray only takes a scipy.sparse value, but given {type(value)}"
             )
@@ -75,9 +77,12 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
     _HANDLED_FUNCTIONS = {}
 
     def __array_function__(self, func, types, args, kwargs):
-        result = func(
-            *(x.value if isinstance(x, SparseArray) else x for x in args), **kwargs
-        )
+        if func in self._HANDLED_FUNCTIONS:
+            result = self._HANDLED_FUNCTIONS[func](*args, **kwargs)
+        else:
+            result = func(
+                *(x.value if isinstance(x, SparseArray) else x for x in args), **kwargs
+            )
         if issparse(result):
             result = SparseArray(result)
         elif isinstance(result, np.matrix):
@@ -119,6 +124,11 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
             and issparse(inputs[1])
         ):
             result = inputs[0] / inputs[1]
+        elif ufunc.__name__ == "matmul" and len(inputs) == 2:
+            arg1, arg2 = (
+                arg.value if isinstance(arg, SparseArray) else arg for arg in inputs
+            )
+            result = arg1 @ arg2
         else:
             result = getattr(ufunc, method)(*inputs, **kwargs)
 
@@ -221,6 +231,9 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
         sparsefuncs.inplace_row_scale(self.value, scale)
         return self
 
+    def getnnz(self):
+        return self.value.getnnz()
+
     def asdask(self, chunks):
         import dask.array as da
 
@@ -262,9 +275,12 @@ except ImportError:
 
 @implements(np.all)
 def _all(a):
-    return np.all(a.value.data)
+    if a.getnnz() != np.multiply(*a.shape):
+        return np.bool_(False)
+    else:
+        return np.all(a.value.data)
 
 
 @implements(np.any)
 def _any(a):
-    return np.any(a.value.adata)
+    return np.any(a.value.data)
