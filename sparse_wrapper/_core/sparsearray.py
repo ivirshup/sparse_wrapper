@@ -1,6 +1,6 @@
 import numbers
 import numpy as np
-import scipy.sparse
+import scipy.sparse as ss
 from scipy.sparse import issparse
 from sklearn.utils import sparsefuncs
 
@@ -48,8 +48,8 @@ def _calculation_method(name):
             v = self.value
             for ax in axis:
                 v = getattr(v, name)(ax)
-            return SparseArray(scipy.sparse.csr_matrix(v))
-        return SparseArray(scipy.sparse.csr_matrix(getattr(self.value, name)(axis)))
+            return SparseArray(ss.csr_matrix(v))
+        return SparseArray(ss.csr_matrix(getattr(self.value, name)(axis)))
 
     return calc
 
