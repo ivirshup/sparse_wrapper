@@ -59,6 +59,8 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
         # respond to np.asarray
         return _convert_to_numpy_array(self.value, dtype)
 
+    _HANDLED_FUNCTIONS = {}
+
     def __array_function__(self, func, types, args, kwargs):
         result = func(*(x.value if isinstance(x, SparseArray) else x for x in args), **kwargs)
         if issparse(result):
@@ -154,6 +156,9 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
     def __ge__(self, other):
         return SparseArray(self.value >= self._get_value(other))
 
+    def copy(self):
+        return SparseArray(self.value.copy())
+
     def astype(self, dtype, copy=True):
         dtype = dtype if isinstance(dtype, np.dtype) else np.dtype(dtype)
         if copy:
@@ -180,6 +185,13 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
         return da.from_array(self, chunks=chunks, asarray=False, fancy=False)
 
 
+def implements(np_function):
+   "Register an __array_function__ implementation for SparseArray objects."
+   def decorator(func):
+       SparseArray._HANDLED_FUNCTIONS[np_function] = func
+       return func
+   return decorator
+
 def _concatenate(L, axis=0):
     if len(L) == 1:
         return L[0]
@@ -198,3 +210,11 @@ try:
     concatenate_lookup.register(SparseArray, _concatenate)
 except ImportError:
     pass
+
+@implements(np.all)
+def _all(a):
+    return np.all(a.value.data)
+
+@implements(np.any)
+def _any(a):
+    return np.any(a.value.adata)
