@@ -1,11 +1,91 @@
+# TODO: Also the inplace versions
+from operator import mul, matmul, add, sub, pow, truediv, floordiv
+from operator import eq, ne, gt, ge, lt, le  # Comparison
+from operator import and_, or_, xor  # Binary
+from operator import lshift, rshift
+
+# Unary
+from operator import pos, neg, abs
+from operator import invert  # Does not work with spmatrix
+
 import numpy as np
+from sparse import COO
 from scipy import sparse as ss
+import pytest
 
 from sparse_wrapper import SparseArray
 
-from fixtures import random_array, matrix_type
+from fixtures import matrix_type, random_array
 
 another_matrix_type = matrix_type
+another_random_array = random_array
+
+UNARY_OPERATORS = [pos, neg, abs]
+BINARY_OPERATORS = [and_, or_, xor]
+COMPARISON_OPERATORS = [eq, ne, gt, ge, lt, le]
+MATH_OPERATORS = [mul, matmul, add, sub, pow, truediv, floordiv]
+
+
+@pytest.fixture(params=UNARY_OPERATORS)
+def unary_op(request):
+    return request.param
+
+
+@pytest.fixture(params=BINARY_OPERATORS)
+def binary_op(request):
+    return request.param
+
+
+@pytest.fixture(params=MATH_OPERATORS)
+def math_op(request):
+    return request.param
+
+
+@pytest.fixture(params=COMPARISON_OPERATORS)
+def comparison_op(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=[np.asarray, lambda x: x.value.copy(), lambda x: COO(x.value)], ids=["ndarray", "spmatrix", "COO"]
+)
+def alternate_form(request):
+    return request.param
+
+
+# Not all of these are necessarily going to work with sparse matrices, all should work for np.ndarray
+def test_math_op(random_array, another_random_array, math_op, alternate_form):
+    sarr1, sarr2 = random_array, another_random_array
+    alt1, alt2 = alternate_form(sarr1), alternate_form(sarr2)
+
+    sarr_res = math_op(sarr1, sarr2)
+    alt_res = math_op(alt1, alt2)
+    assert np.all(sarr_res == alt_res)
+
+
+def test_heterogenous_math_op(
+    random_array, another_random_array, math_op, alternate_form
+):
+    """
+    Test math operator for mixed container operations
+    """
+    sarr1, sarr2 = random_array, another_random_array
+    alt1, alt2 = alternate_form(sarr1), alternate_form(sarr2)
+
+    sarr_res = math_op(sarr1, alt2)
+    alt_res = math_op(alt1, alt2)
+    assert np.all(sarr_res == alt_res)
+
+
+def test_binary_op(matrix_type, another_matrix_type, binary_op, alternate_form):
+    sarr1 = SparseArray(matrix_type(ss.random(100, 100, dtype=bool)))
+    sarr2 = SparseArray(another_matrix_type(ss.random(100, 100, dtype=bool)))
+    alt1, alt2 = alternate_form(sarr1), alternate_form(sarr2)
+
+    sarr_res = binary_op(sarr1, sarr2)
+    alt_res = binary_op(alt1, alt2)
+    assert np.all(sarr_res == alt_res)
+
 
 # boooooo
 npTrue = np.bool_(True)

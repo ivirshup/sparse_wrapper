@@ -7,7 +7,7 @@ from sparse_wrapper import SparseArray
 
 @pytest.fixture(params=["csr", "csc"])
 def random_array(request):
-    return ss.random(100, 100, format=request.param)
+    return SparseArray(ss.random(100, 100, format=request.param))
 
 
 @pytest.fixture(params=[ss.csr_matrix, ss.csc_matrix])
