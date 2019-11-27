@@ -1,12 +1,10 @@
 # TODO: Also the inplace versions
+# TODO: Use of random arrays is a little flaky
 from operator import mul, matmul, add, sub, pow, truediv, floordiv
 from operator import eq, ne, gt, ge, lt, le  # Comparison
 from operator import and_, or_, xor  # Binary
 from operator import lshift, rshift
-
-# Unary
-from operator import pos, neg, abs
-from operator import invert  # Does not work with spmatrix
+from operator import pos, neg, abs, invert # Unary
 
 import numpy as np
 from sparse import COO
@@ -21,10 +19,11 @@ another_matrix_type = matrix_type
 another_random_array = random_array
 
 UNARY_OPERATORS = [pos, neg, abs]
-BINARY_OPERATORS = [and_, or_, xor]
+BINARY_OPERATORS = [and_, or_, xor]  # Note, xor equivalent to neq(sparsepat1, sparsepat2)
 COMPARISON_OPERATORS = [eq, ne, gt, ge, lt, le]
 MATH_OPERATORS = [mul, matmul, add, sub, pow, truediv, floordiv]
-
+SCIPYSPARSE_NOT_IMPLEMENTED = [and_, or_, xor, invert, floordiv, mul, pow]
+# mul and pow work when the other is a scalar
 
 @pytest.fixture(params=UNARY_OPERATORS)
 def unary_op(request):
@@ -47,7 +46,8 @@ def comparison_op(request):
 
 
 @pytest.fixture(
-    params=[np.asarray, lambda x: x.value.copy(), lambda x: COO(x.value)], ids=["ndarray", "spmatrix", "COO"]
+    params=[np.asarray, lambda x: x.value.copy(), lambda x: COO(x.value)],
+    ids=["ndarray", "spmatrix", "COO"],
 )
 def alternate_form(request):
     return request.param
@@ -60,7 +60,7 @@ def test_math_op(random_array, another_random_array, math_op, alternate_form):
 
     sarr_res = math_op(sarr1, sarr2)
     alt_res = math_op(alt1, alt2)
-    assert np.all(sarr_res == alt_res)
+    assert not np.any(sarr_res != alt_res)
 
 
 def test_heterogenous_math_op(
@@ -74,7 +74,7 @@ def test_heterogenous_math_op(
 
     sarr_res = math_op(sarr1, alt2)
     alt_res = math_op(alt1, alt2)
-    assert np.all(sarr_res == alt_res)
+    assert not np.any(sarr_res != alt_res)
 
 
 def test_binary_op(matrix_type, another_matrix_type, binary_op, alternate_form):
@@ -84,7 +84,7 @@ def test_binary_op(matrix_type, another_matrix_type, binary_op, alternate_form):
 
     sarr_res = binary_op(sarr1, sarr2)
     alt_res = binary_op(alt1, alt2)
-    assert np.all(sarr_res == alt_res)
+    assert not np.any(sarr_res != alt_res)
 
 
 # boooooo
