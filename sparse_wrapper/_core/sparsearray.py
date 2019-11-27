@@ -4,6 +4,8 @@ import scipy.sparse as ss
 from scipy.sparse import issparse
 from sklearn.utils import sparsefuncs
 
+from sparse import COO
+
 
 def sparse_dask(arr, chunks):
     return SparseArray(arr).asdask(chunks)
@@ -64,6 +66,8 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, value):
         if isinstance(value, (np.ndarray, np.matrix)):
             value = ss.csr_matrix(value)
+        elif isinstance(value, COO):
+            value = value.tocsr()
         elif not issparse(value):
             raise ValueError(
                 f"SparseArray only takes a scipy.sparse value, but given {type(value)}"
