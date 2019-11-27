@@ -63,7 +63,7 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
 
     def __init__(self, value):
         if isinstance(value, (np.ndarray, np.matrix)):
-            value = scipy.sparse.csr_matrix(value)
+            value = ss.csr_matrix(value)
         elif not issparse(value):
             raise ValueError(
                 f"SparseArray only takes a scipy.sparse value, but given {type(value)}"
@@ -157,6 +157,18 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
     def dtype(self):
         return self.value.dtype
 
+    @property
+    def data(self):
+        return self.value.data
+
+    @property
+    def indices(self):
+        return self.value.indices
+
+    @property
+    def indptr(self):
+        return self.value.indices
+
     def __getitem__(self, item):
         if isinstance(item, numbers.Number):
             return _convert_to_numpy_array(self.value.__getitem__(item)).squeeze()
@@ -238,6 +250,9 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
         import dask.array as da
 
         return da.from_array(self, chunks=chunks, asarray=False, fancy=False)
+
+    def todense(self):
+        return np.asarray(self)
 
 
 def implements(np_function):
