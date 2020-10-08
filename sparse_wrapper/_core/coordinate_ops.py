@@ -337,7 +337,9 @@ def op_union_indices_csr_csr(
     return out_data, out_indices, out_indptr
 
 
-def difference_indices(a: ScipyCompressedSparse, b: ScipyCompressedSparse) -> ScipyCompressedSparse:
+def difference_indices(
+    a: ScipyCompressedSparse, b: ScipyCompressedSparse
+) -> ScipyCompressedSparse:
     assert a.shape == b.shape
 
     if type(a) != type(b):
@@ -349,9 +351,7 @@ def difference_indices(a: ScipyCompressedSparse, b: ScipyCompressedSparse) -> Sc
         a.indptr, a.indices, b.indptr, b.indices
     )
 
-    return type(a)(
-        (np.ones(len(indices), dtype=bool), indices, indptr), shape=a.shape
-    )
+    return type(a)((np.ones(len(indices), dtype=bool), indices, indptr), shape=a.shape)
 
 
 @njit
@@ -395,6 +395,74 @@ def difference_indices_csr_csr(
 
         if b_idx < b_end:
             b_idx = b_end
+
+        out_indptr[i + 1] = out_idx
+
+    out_indices = out_indices[: out_idx + 1]
+
+    return out_indices, out_indptr
+
+
+def symdifference_indices(a, b):
+    assert a.shape == b.shape
+
+    if type(a) != type(b):
+        b = type(a)(b)
+    a.sort_indices()
+    b.sort_indices()
+
+    indices, indptr = symdifference_indices_csr_csr(
+        a.indptr, a.indices, b.indptr, b.indices
+    )
+
+    return type(a)((np.ones(len(indices), dtype=bool), indices, indptr), shape=a.shape)
+
+
+def symdifference_indices_csr_csr(
+    a_indptr: np.ndarray,
+    a_indices: np.ndarray,
+    b_indptr: np.ndarray,
+    b_indices: np.ndarray,
+):
+    out_indptr = np.zeros_like(a_indptr)
+    out_indices = np.zeros(len(a_indices) + len(b_indices), dtype=a_indices.dtype)
+
+    out_idx = 0
+
+    for i in range(len(a_indptr) - 1):
+
+        a_idx = a_indptr[i]
+        a_end = a_indptr[i + 1]
+        b_idx = b_indptr[i]
+        b_end = b_indptr[i + 1]
+
+        while (a_idx < a_end) and (b_idx < b_end):
+            a_j = a_indices[a_idx]
+            b_j = b_indices[b_idx]
+            if a_j < b_j:
+                out_indices[out_idx] = a_j
+                a_idx += 1
+                out_idx += 1
+            elif b_j < a_j:
+                out_indices[out_idx] = b_j
+                b_idx += 1
+                out_idx += 1
+            else:
+                a_idx += 1
+                b_idx += 1
+
+        # Catch up the other set
+        while a_idx < a_end:
+            a_j = a_indices[a_idx]
+            out_indices[out_idx] = a_j
+            a_idx += 1
+            out_idx += 1
+
+        while b_idx < b_end:
+            b_j = b_indices[b_idx]
+            out_indices[out_idx] = b_j
+            b_idx += 1
+            out_idx += 1
 
         out_indptr[i + 1] = out_idx
 
