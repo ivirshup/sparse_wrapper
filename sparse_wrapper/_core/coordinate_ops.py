@@ -418,6 +418,7 @@ def symdifference_indices(a, b):
     return type(a)((np.ones(len(indices), dtype=bool), indices, indptr), shape=a.shape)
 
 
+@njit
 def symdifference_indices_csr_csr(
     a_indptr: np.ndarray,
     a_indices: np.ndarray,
