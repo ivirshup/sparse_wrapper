@@ -1,5 +1,7 @@
 import numbers
+from sparse_wrapper._core.coordinate_ops import op_union_indices
 import numpy as np
+from numba import njit
 import scipy.sparse as ss
 from scipy.sparse import issparse
 from sklearn.utils import sparsefuncs
@@ -128,11 +130,26 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
             and issparse(inputs[1])
         ):
             result = inputs[0] / inputs[1]
+        elif (
+            ufunc.__name__ == "floor_divide"
+            and len(inputs) == 2
+            and issparse(inputs[0])
+            and issparse(inputs[1])
+        ):
+
+            result = inputs[0] / inputs[1]
+        elif ufunc.__name__ == "floor_divide" and len(inputs) == 2:
+            result = inputs[0]._divide(inputs[1])
         elif ufunc.__name__ == "matmul" and len(inputs) == 2:
             arg1, arg2 = (
                 arg.value if isinstance(arg, SparseArray) else arg for arg in inputs
             )
             result = arg1 @ arg2
+        elif ufunc.__name__ == "power" and len(inputs) == 2:
+            arg1, arg2 = (
+                arg.value if isinstance(arg, SparseArray) else arg for arg in inputs
+            )
+            result = op_union_indices(njit(lambda x, y: np.power(x, y)), arg1, arg2)
         else:
             result = getattr(ufunc, method)(*inputs, **kwargs)
 

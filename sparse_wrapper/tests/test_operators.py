@@ -15,8 +15,9 @@ import pytest
 
 from sparse_wrapper import SparseArray
 
-from fixtures import matrix_type, random_array
+from fixtures import matrix_type, random_array, dtype
 
+another_dtype = dtype
 another_matrix_type = matrix_type
 another_random_array = random_array
 
@@ -77,11 +78,11 @@ def alternate_form(request):
 
 
 # Not all of these are necessarily going to work with sparse matrices, all should work for np.ndarray
-def test_math_op(random_array, another_random_array, math_op, alternate_form):
+def test_math_op(random_array, another_random_array, math_op, alternate_form, dtype, another_dtype):
     if math_op in SCIPYSPARSE_NOT_IMPLEMENTED and alternate_form == asspmatrix:
         pytest.skip("Not supported")
 
-    sarr1, sarr2 = random_array, another_random_array
+    sarr1, sarr2 = random_array.astype(dtype), another_random_array.astype(dtype)
     alt1, alt2 = alternate_form(sarr1), alternate_form(sarr2)
 
     sarr_res = math_op(sarr1, sarr2)
