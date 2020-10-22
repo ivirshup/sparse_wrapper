@@ -1,8 +1,9 @@
+from abc import ABC, abstractmethod
 from math import sin
 import numbers
 from functools import singledispatch
+from numbers import Number
 
-from sparse_wrapper._core.coordinate_ops import op_union_indices
 import numpy as np
 from numba import njit
 import scipy.sparse as ss
@@ -10,6 +11,9 @@ from scipy.sparse import issparse
 from sklearn.utils import sparsefuncs
 
 from sparse import COO
+
+from .indexing import major_index_int, minor_index_int
+from .coordinate_ops import op_union_indices
 
 
 def sparse_dask(arr, chunks):
@@ -61,10 +65,15 @@ def _calculation_method(name):
     return calc
 
 
-class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin):
+class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin, ABC):
     """
     An wrapper around scipy.sparse to allow sparse arrays to be the chunks in a dask array.
     """
+
+    @property
+    @abstractmethod
+    def _compressed_dim(self) -> int:
+        pass
 
     __array_priority__ = 10.0
 
@@ -80,7 +89,7 @@ class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin):
         else:
             result = func(
                 *(x.value if isinstance(x, CompressedSparseArray) else x for x in args),
-                **kwargs
+                **kwargs,
             )
         if issparse(result):
             result = assparsearray(result)
@@ -182,19 +191,24 @@ class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin):
 
     @property
     def indptr(self):
-        return self.value.indices
+        return self.value.indptr
 
     @property
     def T(self):
         return self.transpose()
 
     def __getitem__(self, item):
-        if isinstance(item, numbers.Number):
-            return _convert_to_numpy_array(self.value.__getitem__(item)).squeeze()
-        elif isinstance(item, tuple) and (
-            isinstance(item[0], numbers.Number) or isinstance(item[1], numbers.Number)
-        ):
-            return _convert_to_numpy_array(self.value.__getitem__(item)).squeeze()
+        dense_dim = abs(self._compressed_dim - 1)
+        if not isinstance(item, tuple):
+            item = (item, slice(None))
+        assert len(item) == 2
+        # If one or more index is an int
+        if isinstance(item[0], Number) and isinstance(item[1], Number):
+            return self.value[item]
+        if isinstance(item[self._compressed_dim], Number):
+            return major_index_int(self, item[self._compressed_dim])[item[dense_dim]]
+        elif isinstance(item[abs(self._compressed_dim - 1)], Number):
+            return minor_index_int(self, item[dense_dim], item[self._compressed_dim])
         # replace slices that span the entire column or row with slice(None) to ensure cupy sparse doesn't blow up
         if (
             isinstance(item[0], slice)
@@ -274,6 +288,10 @@ class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin):
 
 
 class CSR(CompressedSparseArray):
+    @property
+    def _compressed_dim(self) -> int:
+        return 0
+
     def __init__(self, a):
         if isinstance(a, CSC):
             self.value = CSC.value.tocsr()
@@ -286,6 +304,10 @@ class CSR(CompressedSparseArray):
 
 
 class CSC(CompressedSparseArray):
+    @property
+    def _compressed_dim(self) -> int:
+        return 1
+
     def __init__(self, a):
         if isinstance(a, CSR):
             self.value = CSR.value.tocsr()
