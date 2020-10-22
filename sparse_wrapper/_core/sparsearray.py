@@ -68,20 +68,6 @@ class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin):
 
     __array_priority__ = 10.0
 
-    # def __new__(cls, arg):
-    #     return assparsearray(arg)
-
-    # def __init__(self, value):
-    #     if isinstance(value, (np.ndarray, np.matrix)):
-    #         value = ss.csr_matrix(value)
-    #     elif isinstance(value, COO):
-    #         value = value.tocsr()
-    #     elif not issparse(value):
-    #         raise ValueError(
-    #             f"CompressedSparseArray only takes a scipy.sparse value, but given {type(value)}"
-    #         )
-    #     self.value = value
-
     def __array__(self, dtype=None, **kwargs):
         # respond to np.asarray
         return _convert_to_numpy_array(self.value, dtype)
@@ -104,15 +90,12 @@ class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin):
 
     # One might also consider adding the built-in list type to this
     # list, to support operations like np.add(array_like, list)
-    _HANDLED_TYPES = (np.ndarray, numbers.Number)
+    _HANDLED_TYPES = (np.ndarray, numbers.Number, COO, ss.spmatrix)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
             # Only support operations with instances of _HANDLED_TYPES.
-            # Use CompressedSparseArray instead of type(self) for isinstance to
-            # allow subclasses that don't override __array_ufunc__ to
-            # handle CompressedSparseArray objects.
             if not isinstance(x, self._HANDLED_TYPES + (CompressedSparseArray,)):
                 return NotImplemented
 
@@ -175,7 +158,7 @@ class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin):
             return type(self)(result)
 
     def __repr__(self):
-        return "%s(%r)" % (type(self).__name__, self.value)
+        return f"<{type(self).__name__}: shape={self.shape}, dtype={self.dtype}>"
 
     @property
     def ndim(self):
