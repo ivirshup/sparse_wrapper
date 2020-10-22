@@ -173,6 +173,10 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
     def indptr(self):
         return self.value.indices
 
+    @property
+    def T(self):
+        return self.transpose()
+
     def __getitem__(self, item):
         if isinstance(item, numbers.Number):
             return _convert_to_numpy_array(self.value.__getitem__(item)).squeeze()
@@ -257,6 +261,9 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
 
     def todense(self):
         return np.asarray(self)
+
+    def transpose(self):
+        return SparseArray(self.value.transpose())
 
 
 def implements(np_function):
