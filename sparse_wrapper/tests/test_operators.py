@@ -13,7 +13,7 @@ from sparse import COO
 from scipy import sparse as ss
 import pytest
 
-from sparse_wrapper import SparseArray
+from sparse_wrapper import CompressedSparseArray, assparsearray
 
 from fixtures import matrix_type, random_array, dtype
 
@@ -111,8 +111,8 @@ def test_boolean_op(matrix_type, another_matrix_type, boolean_op, alternate_form
     if boolean_op in SCIPYSPARSE_NOT_IMPLEMENTED and alternate_form == asspmatrix:
         pytest.skip("Not supported")
 
-    sarr1 = SparseArray(matrix_type(ss.random(100, 100, dtype=bool)))
-    sarr2 = SparseArray(another_matrix_type(ss.random(100, 100, dtype=bool)))
+    sarr1 = assparsearray(matrix_type(ss.random(100, 100, dtype=bool)))
+    sarr2 = assparsearray(another_matrix_type(ss.random(100, 100, dtype=bool)))
     alt1, alt2 = alternate_form(sarr1), alternate_form(sarr2)
 
     sarr_res = boolean_op(sarr1, sarr2)
@@ -154,7 +154,7 @@ npFalse = np.bool_(False)
 
 def test_equality():
     mtx = ss.random(100, 100, format="csr")
-    arr = SparseArray(mtx)
+    arr = assparsearray(mtx)
 
     assert np.all(arr == arr.copy()) is np.bool_(True)
     # assert np.all(mtx == arr) # TODO
@@ -164,7 +164,7 @@ def test_equality():
 def test_add(matrix_type, another_matrix_type):
     mtx1 = matrix_type(ss.random(100, 100))
     mtx2 = another_matrix_type(ss.random(100, 100))
-    arr1, arr2 = SparseArray(mtx1), SparseArray(mtx2)
+    arr1, arr2 = assparsearray(mtx1), assparsearray(mtx2)
 
     assert np.all(arr1 + arr2 == mtx1 + mtx2)
 
@@ -172,14 +172,14 @@ def test_add(matrix_type, another_matrix_type):
 def test_subtract(matrix_type, another_matrix_type):
     mtx1 = matrix_type(ss.random(100, 100))
     mtx2 = another_matrix_type(ss.random(100, 100))
-    arr1, arr2 = SparseArray(mtx1), SparseArray(mtx2)
+    arr1, arr2 = assparsearray(mtx1), assparsearray(mtx2)
 
     assert np.all(arr1 - arr2 == mtx1 - mtx2)
 
 
 def test_divide_scalar(matrix_type):
     mtx = matrix_type(ss.random(100, 100))
-    arr = SparseArray(mtx)
+    arr = assparsearray(mtx)
 
     assert np.all(arr / 2 == mtx / 2)
 
@@ -187,7 +187,7 @@ def test_divide_scalar(matrix_type):
 # def test_divide(matrix_type, another_matrix_type):
 #     mtx1 = matrix_type(ss.random(100, 100))
 #     mtx2 = another_matrix_type(ss.random(100, 100))
-#     arr1, arr2 = SparseArray(mtx1), SparseArray(mtx2)
+#     arr1, arr2 = CompressedSparseArray(mtx1), CompressedSparseArray(mtx2)
 #     assert np.all(arr1 / arr2 == mtx1 / mtx2)
 
 
@@ -198,6 +198,6 @@ def test_matmul_identity(random_array):
 def test_matmul(matrix_type, another_matrix_type):
     mtx1 = matrix_type(ss.random(100, 100))
     mtx2 = another_matrix_type(ss.random(100, 100))
-    arr1, arr2 = SparseArray(mtx1), SparseArray(mtx2)
+    arr1, arr2 = assparsearray(mtx1), assparsearray(mtx2)
 
     assert np.all(arr1 @ arr2 == mtx1 @ mtx2)

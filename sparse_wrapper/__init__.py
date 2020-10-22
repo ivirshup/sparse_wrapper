@@ -1,1 +1,1 @@
-from ._core import SparseArray
+from ._core.sparsearray import CompressedSparseArray, CSC, CSR, assparsearray

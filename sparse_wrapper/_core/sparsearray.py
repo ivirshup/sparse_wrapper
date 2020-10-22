@@ -1,4 +1,7 @@
+from math import sin
 import numbers
+from functools import singledispatch
+
 from sparse_wrapper._core.coordinate_ops import op_union_indices
 import numpy as np
 from numba import njit
@@ -10,7 +13,7 @@ from sparse import COO
 
 
 def sparse_dask(arr, chunks):
-    return SparseArray(arr).asdask(chunks)
+    return assparsearray(arr).asdask(chunks)
 
 
 def row_scale(sparse_dask_array, scale):
@@ -18,7 +21,7 @@ def row_scale(sparse_dask_array, scale):
         if block_info == "__block_info_dummy__":
             return X
         loc = block_info[0]["array-location"][0]
-        if isinstance(X, SparseArray):
+        if isinstance(X, CompressedSparseArray):
             return X.inplace_row_scale(scale[loc[0] : loc[1]])
         else:
             return X / scale[loc[0] : loc[1]][:, np.newaxis]
@@ -52,29 +55,32 @@ def _calculation_method(name):
             v = self.value
             for ax in axis:
                 v = getattr(v, name)(ax)
-            return SparseArray(ss.csr_matrix(v))
-        return SparseArray(ss.csr_matrix(getattr(self.value, name)(axis)))
+            return assparsearray(ss.csr_matrix(v))
+        return assparsearray(ss.csr_matrix(getattr(self.value, name)(axis)))
 
     return calc
 
 
-class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
+class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin):
     """
     An wrapper around scipy.sparse to allow sparse arrays to be the chunks in a dask array.
     """
 
     __array_priority__ = 10.0
 
-    def __init__(self, value):
-        if isinstance(value, (np.ndarray, np.matrix)):
-            value = ss.csr_matrix(value)
-        elif isinstance(value, COO):
-            value = value.tocsr()
-        elif not issparse(value):
-            raise ValueError(
-                f"SparseArray only takes a scipy.sparse value, but given {type(value)}"
-            )
-        self.value = value
+    # def __new__(cls, arg):
+    #     return assparsearray(arg)
+
+    # def __init__(self, value):
+    #     if isinstance(value, (np.ndarray, np.matrix)):
+    #         value = ss.csr_matrix(value)
+    #     elif isinstance(value, COO):
+    #         value = value.tocsr()
+    #     elif not issparse(value):
+    #         raise ValueError(
+    #             f"CompressedSparseArray only takes a scipy.sparse value, but given {type(value)}"
+    #         )
+    #     self.value = value
 
     def __array__(self, dtype=None, **kwargs):
         # respond to np.asarray
@@ -87,10 +93,11 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
             result = self._HANDLED_FUNCTIONS[func](*args, **kwargs)
         else:
             result = func(
-                *(x.value if isinstance(x, SparseArray) else x for x in args), **kwargs
+                *(x.value if isinstance(x, CompressedSparseArray) else x for x in args),
+                **kwargs
             )
         if issparse(result):
-            result = SparseArray(result)
+            result = assparsearray(result)
         elif isinstance(result, np.matrix):
             result = np.asarray(result)
         return result
@@ -103,17 +110,19 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
         out = kwargs.get("out", ())
         for x in inputs + out:
             # Only support operations with instances of _HANDLED_TYPES.
-            # Use SparseArray instead of type(self) for isinstance to
+            # Use CompressedSparseArray instead of type(self) for isinstance to
             # allow subclasses that don't override __array_ufunc__ to
-            # handle SparseArray objects.
-            if not isinstance(x, self._HANDLED_TYPES + (SparseArray,)):
+            # handle CompressedSparseArray objects.
+            if not isinstance(x, self._HANDLED_TYPES + (CompressedSparseArray,)):
                 return NotImplemented
 
         # Defer to the implementation of the ufunc on unwrapped values.
-        inputs = tuple(x.value if isinstance(x, SparseArray) else x for x in inputs)
+        inputs = tuple(
+            x.value if isinstance(x, CompressedSparseArray) else x for x in inputs
+        )
         if out:
             kwargs["out"] = tuple(
-                x.value if isinstance(x, SparseArray) else x for x in out
+                x.value if isinstance(x, CompressedSparseArray) else x for x in out
             )
         # special case multiplication for sparse input, so it is elementwise, not matrix multiplication
         if (
@@ -142,12 +151,14 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
             result = inputs[0]._divide(inputs[1])
         elif ufunc.__name__ == "matmul" and len(inputs) == 2:
             arg1, arg2 = (
-                arg.value if isinstance(arg, SparseArray) else arg for arg in inputs
+                arg.value if isinstance(arg, CompressedSparseArray) else arg
+                for arg in inputs
             )
             result = arg1 @ arg2
         elif ufunc.__name__ == "power" and len(inputs) == 2:
             arg1, arg2 = (
-                arg.value if isinstance(arg, SparseArray) else arg for arg in inputs
+                arg.value if isinstance(arg, CompressedSparseArray) else arg
+                for arg in inputs
             )
             result = op_union_indices(njit(lambda x, y: np.power(x, y)), arg1, arg2)
         else:
@@ -220,37 +231,33 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
             item1 = slice(None)
         else:
             item1 = item[1]
-        return SparseArray(self.value.__getitem__((item0, item1)))
-
-    def _get_value(self, other):
-        # get the value if a SparseArray, or just return other
-        return other.value if isinstance(other, SparseArray) else other
+        return assparsearray(self.value.__getitem__((item0, item1)))
 
     def __lt__(self, other):
-        return SparseArray(self.value < self._get_value(other))
+        return assparsearray(self.value < _get_value(other))
 
     def __le__(self, other):
-        return SparseArray(self.value <= self._get_value(other))
+        return assparsearray(self.value <= _get_value(other))
 
     def __eq__(self, other):
-        return SparseArray(self.value == self._get_value(other))
+        return assparsearray(self.value == _get_value(other))
 
     def __ne__(self, other):
-        return SparseArray(self.value != self._get_value(other))
+        return assparsearray(self.value != _get_value(other))
 
     def __gt__(self, other):
-        return SparseArray(self.value > self._get_value(other))
+        return assparsearray(self.value > _get_value(other))
 
     def __ge__(self, other):
-        return SparseArray(self.value >= self._get_value(other))
+        return assparsearray(self.value >= _get_value(other))
 
     def copy(self):
-        return SparseArray(self.value.copy())
+        return assparsearray(self.value.copy())
 
     def astype(self, dtype, copy=True):
         dtype = dtype if isinstance(dtype, np.dtype) else np.dtype(dtype)
         if copy:
-            return SparseArray(self.value.astype(dtype))
+            return assparsearray(self.value.astype(dtype))
         else:
             self.value = self.value.astype(dtype, copy=copy)
             return self
@@ -280,14 +287,38 @@ class SparseArray(np.lib.mixins.NDArrayOperatorsMixin):
         return np.asarray(self)
 
     def transpose(self):
-        return SparseArray(self.value.transpose())
+        return assparsearray(self.value.transpose())
+
+
+class CSR(CompressedSparseArray):
+    def __init__(self, a):
+        if isinstance(a, CSC):
+            self.value = CSC.value.tocsr()
+        elif isinstance(a, ss.csr_matrix):
+            self.value = a
+        elif isinstance(a, COO):
+            self.value = a.tocsr()
+        else:
+            self.value = ss.csr_matrix(a)
+
+
+class CSC(CompressedSparseArray):
+    def __init__(self, a):
+        if isinstance(a, CSR):
+            self.value = CSR.value.tocsr()
+        elif isinstance(a, ss.csc_matrix):
+            self.value = a
+        elif isinstance(a, COO):
+            self.value = a.tocsc()
+        else:
+            self.value = ss.csc_matrix(a)
 
 
 def implements(np_function):
-    "Register an __array_function__ implementation for SparseArray objects."
+    "Register an __array_function__ implementation for CompressedSparseArray objects."
 
     def decorator(func):
-        SparseArray._HANDLED_FUNCTIONS[np_function] = func
+        CompressedSparseArray._HANDLED_FUNCTIONS[np_function] = func
         return func
 
     return decorator
@@ -297,9 +328,9 @@ def _concatenate(L, axis=0):
     if len(L) == 1:
         return L[0]
     if axis == 0:
-        return SparseArray(scipy.sparse.vstack(tuple([sa.value for sa in L])))
+        return assparsearray(scipy.sparse.vstack(tuple([sa.value for sa in L])))
     elif axis == 1:
-        return SparseArray(scipy.sparse.hstack(tuple([sa.value for sa in L])))
+        return assparsearray(scipy.sparse.hstack(tuple([sa.value for sa in L])))
     else:
         msg = (
             "Can only concatenate sparse matrices for axis in " "{0, 1}.  Got %s" % axis
@@ -311,7 +342,7 @@ def _concatenate(L, axis=0):
 try:
     from dask.array.core import concatenate_lookup
 
-    concatenate_lookup.register(SparseArray, _concatenate)
+    concatenate_lookup.register(CompressedSparseArray, _concatenate)
 except ImportError:
     pass
 
@@ -327,3 +358,38 @@ def _all(a):
 @implements(np.any)
 def _any(a):
     return np.any(a.value.data)
+
+
+@singledispatch
+def _get_value(a):
+    return a
+
+
+@_get_value.register(CompressedSparseArray)
+def _(a):
+    return a.value
+
+
+@singledispatch
+def assparsearray(a):
+    return NotImplemented
+
+
+@assparsearray.register(ss.csr_matrix)
+def _(a: ss.csr_matrix):
+    return CSR(a)
+
+
+@assparsearray.register(ss.csc_matrix)
+def _(a: ss.csc_matrix):
+    return CSC(a)
+
+
+@assparsearray.register(np.ndarray)
+def _(a: np.ndarray):
+    return CSR(ss.csr_matrix(a))
+
+
+@assparsearray.register(ss.coo_matrix)
+def _(a: ss.coo_matrix):
+    return COO(a)

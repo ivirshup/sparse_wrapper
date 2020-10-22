@@ -2,12 +2,12 @@ import numpy as np
 from scipy import sparse
 import pytest
 
-from sparse_wrapper import SparseArray
+from sparse_wrapper import CSC, CSR, assparsearray
 
 
-@pytest.fixture(params=["csr", "csc"])
+@pytest.fixture(params=[CSR, CSC])
 def random_array(request):
-    return SparseArray(sparse.random(100, 100, format=request.param))
+    return request.param(sparse.random(100, 100))
 
 
 @pytest.fixture(params=[bool, int, float])
