@@ -33,10 +33,9 @@ def indptr2indices(indptr: np.ndarray) -> np.ndarray:
 @generated_jit(cache=True)
 def resolve_indices(a, l):
     if isinstance(a, (types.SliceType, types.SliceLiteral)):
-        # if isinstance(a, types.SliceType):
         return lambda a, l: range(*a.indices(l))
     else:
-        return lambda a, _: a
+        return lambda a, l: a
 
 
 #################
@@ -59,7 +58,12 @@ def major_index_int(x, idx: int) -> COO:  #: "CompressedMatrices2D",
 
 def minor_index_int(x, idx, major_idx: Union[slice, np.ndarray] = slice(None)):
     data, _, indptr, shape = minor_idx_adv(
-        x.data, x.indices, x.indptr, np.array([idx]), major_idx=major_idx
+        x.data,
+        x.indices,
+        x.indptr,
+        x.shape[x._uncompressed_dim],
+        np.array([idx]),
+        major_idx=major_idx,
     )
     return COO(
         indptr2indices(indptr)[None, :],
@@ -70,6 +74,13 @@ def minor_index_int(x, idx, major_idx: Union[slice, np.ndarray] = slice(None)):
     )
 
 
+def minor_index_adv(x, minor_idx, major_idx):
+    data, indices, indptr, shape = minor_idx_adv(
+        x.data, x.indices, x.indptr, x.shape[x._uncompressed_dim], minor_idx, major_idx
+    )
+    return type(x)(type(x.value)((data, indices, indptr), shape=shape))
+
+
 ################
 ### Lowlevel ###
 ################
@@ -77,12 +88,18 @@ def minor_index_int(x, idx, major_idx: Union[slice, np.ndarray] = slice(None)):
 
 @njit(cache=True)
 def minor_idx_adv(
-    data, indices, indptr, minor_idx, major_idx: Union[slice, np.ndarray] = slice(None)
+    data,
+    indices,
+    indptr,
+    minor_idx_size: int,
+    minor_idx,
+    major_idx: Union[slice, np.ndarray] = slice(None),
 ):
     out_indices = []
     out_data = []
 
     row_iter = resolve_indices(major_idx, len(indptr) - 1)
+    minor_idx = resolve_indices(minor_idx, minor_idx_size)
 
     out_indptr = np.zeros(len(row_iter) + 1, dtype=np.int64)
     found = 0

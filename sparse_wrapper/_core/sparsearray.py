@@ -12,7 +12,7 @@ from sklearn.utils import sparsefuncs
 
 from sparse import COO
 
-from .indexing import major_index_int, minor_index_int
+from .indexing import major_index_int, minor_index_int, minor_index_adv
 from .coordinate_ops import op_union_indices
 
 
@@ -74,6 +74,10 @@ class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin, ABC):
     @abstractmethod
     def _compressed_dim(self) -> int:
         pass
+
+    @property
+    def _uncompressed_dim(self) -> int:
+        return 1 - self._compressed_dim
 
     __array_priority__ = 10.0
 
@@ -207,8 +211,10 @@ class CompressedSparseArray(np.lib.mixins.NDArrayOperatorsMixin, ABC):
             return self.value[item]
         if isinstance(item[self._compressed_dim], Number):
             return major_index_int(self, item[self._compressed_dim])[item[dense_dim]]
-        elif isinstance(item[abs(self._compressed_dim - 1)], Number):
+        elif isinstance(item[dense_dim], Number):
             return minor_index_int(self, item[dense_dim], item[self._compressed_dim])
+        elif not isinstance(item[dense_dim], slice) or (item[dense_dim] != slice(None)):
+            return minor_index_adv(self, item[dense_dim], item[self._compressed_dim])
         # replace slices that span the entire column or row with slice(None) to ensure cupy sparse doesn't blow up
         if (
             isinstance(item[0], slice)
