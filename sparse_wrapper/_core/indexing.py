@@ -1,7 +1,7 @@
 from os import major
 from typing import Union, Tuple, Sequence
 import scipy.sparse as ss
-from numba import njit, generated_jit, types
+from numba import njit, generated_jit, types, typeof
 import numpy as np
 from sparse import COO
 
@@ -40,7 +40,8 @@ def minor_index_int(x, idx, major_idx: Union[slice, np.ndarray] = slice(None)):
 
 @generated_jit(cache=True)
 def resolve_indices(a, l):
-    if isinstance(a, types.SliceType):
+    if isinstance(a, (types.SliceType, types.SliceLiteral)):
+    # if isinstance(a, types.SliceType):
         return lambda a, l: range(*a.indices(l))
     else:
         return lambda a, _: a
@@ -55,13 +56,24 @@ def minor_idx_adv(
 
     row_iter = resolve_indices(major_idx, len(indptr) - 1)
 
+    out_indptr = np.zeros(len(row_iter) + 1, dtype=np.int64)
+    found = 0
+
     for idx, i in enumerate(row_iter):
+
         start = indptr[i]
         stop = indptr[i + 1]
         row_indices = indices[start:stop]
         possible_idx = np.searchsorted(row_indices, minor_idx)
-        if row_indices[possible_idx] == minor_idx:
-            out_indices.append(idx)
-            out_data.append(data[start + possible_idx])
+        for j, p_idx in enumerate(possible_idx):
+            if row_indices[p_idx] == minor_idx[j]:
+                found += 1
+                out_indices.append(j)
+                out_data.append(data[start + p_idx])
+        out_indptr[idx+1] = found
 
-    return np.array(out_indices), np.array(out_data), len(row_iter)
+    return (
+        np.array(out_data),
+        np.array(out_indices),
+        out_indptr
+    )
