@@ -26,13 +26,13 @@ def major_index_int(x, idx: int) -> COO:  #: "CompressedMatrices2D",
 
 
 def minor_index_int(x, idx, major_idx: Union[slice, np.ndarray] = slice(None)):
-    indices, data, shape = minor_idx_adv(
-        x.data, x.indices, x.indptr, idx, major_idx=major_idx
+    data, indices, _, shape = minor_idx_adv(
+        x.data, x.indices, x.indptr, np.array([idx]), major_idx=major_idx
     )
     return COO(
         indices[None, :],
         data=data,
-        shape=shape,
+        shape=max(*shape),
         sorted=True,
         has_duplicates=False,
     )
@@ -75,5 +75,6 @@ def minor_idx_adv(
     return (
         np.array(out_data),
         np.array(out_indices),
-        out_indptr
+        out_indptr,
+        (len(row_iter), len(minor_idx))
     )
