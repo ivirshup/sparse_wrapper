@@ -17,11 +17,17 @@ CSR(a) * CSR(a)
 # <CSR: shape=(5, 10), dtype=float64>
 CSR(a) + COO(a)
 # <CSR: shape=(5, 10), dtype=float64>
+CSR(a)[1, :]
+# <COO: shape=(10,), dtype=float64, nnz=3, fill_value=0.0>
+CSR(a)[:, [1, 2, 3]]
+# <CSR: shape=(5, 3), dtype=float64>
 
 # Sparse operations
 
 CSR(a) @ CSR(a).T
 # <CSR: shape=(5, 5), dtype=float64>
+
+# Indexing
 ```
 
 Very WIP.
