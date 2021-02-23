@@ -75,9 +75,16 @@ def minor_index_int(x, idx, major_idx: Union[slice, np.ndarray] = slice(None)):
 
 
 def minor_index_adv(x, minor_idx, major_idx):
+    # TODO: Handle this elsewhere
+    if isinstance(minor_idx, np.ndarray):
+        minor_idx = np.ravel(minor_idx)
+    if isinstance(major_idx, np.ndarray):
+        major_idx = np.ravel(major_idx)
     data, indices, indptr, shape = minor_idx_adv(
         x.data, x.indices, x.indptr, x.shape[x._uncompressed_dim], minor_idx, major_idx
     )
+    if x._compressed_dim == 1:  # CSC
+        shape = shape[::-1]
     return type(x)(type(x.value)((data, indices, indptr), shape=shape))
 
 
