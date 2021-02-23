@@ -9,13 +9,16 @@ from sparse import COO
 
 import pytest
 
+
 @singledispatch
 def asnparray(x):
     return np.asarray(x)
 
+
 @asnparray.register(sparse.spmatrix)
 def _(x):
     return x.toarray()
+
 
 @asnparray.register(COO)
 def _(x):
@@ -32,6 +35,8 @@ def make_idx_array(maxn, n=10, repeat=False, sorted=False):
         idx.sort()
     return idx
 
+
+# TODO: Give these cases names
 @pytest.mark.parametrize(
     "idx",
     [
@@ -45,13 +50,12 @@ def make_idx_array(maxn, n=10, repeat=False, sorted=False):
         (slice(None), slice(None)),
         (make_idx_array(50), slice(None)),
         (slice(None), make_idx_array(99)),
-        np.ix_(make_idx_array(49, 20), make_idx_array(99, 50))
-    ]
+        np.ix_(make_idx_array(49, 20), make_idx_array(99, 50)),
+    ],
 )
 def test_indexing(matrix_type, idx):
     a = assparsearray(matrix_type(sparse.random(50, 100, format="csr", density=0.4)))
 
     true_result = a.value.toarray()[idx]
     curr_result = a[idx]
-    assert np.array_equal(asnparray(curr_result), true_result)
-
+    np.testing.assert_array_equal(asnparray(curr_result), true_result)
